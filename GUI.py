@@ -1,15 +1,26 @@
+import os
 import tkinter as tk
 from tkinter.ttk import Treeview
 from tkinter import ttk
 import xml.etree.ElementTree as ET
 
 
-class ListSerializer:
+class Serialisierung:
     @staticmethod
-    def speichern(liste, dateipfad):
-        root = ET.Element("Liste")
+    def Speichern(liste, dateipfad):
+        try:
+            tree = ET.parse(dateipfad)
+            root = tree.getroot()
+        except (FileNotFoundError, ET.ParseError):
+            # Die Datei existiert nicht oder ist fehlerhaft, erstelle ein neues Element
+            root = ET.Element("Liste")
+
+        # Füge einen neuen "Array"-Eintrag hinzu
+        array_element = ET.SubElement(root, "Array")
+
+        # Füge neue Einträge hinzu
         for element in liste:
-            eintrag = ET.SubElement(root, "Eintrag")
+            eintrag = ET.SubElement(array_element, "Eintrag")
             eintrag.text = str(element)
 
         tree = ET.ElementTree(root)
@@ -17,11 +28,18 @@ class ListSerializer:
             tree.write(datei)
 
     @staticmethod
-    def laden(dateipfad):
+    def Laden(dateipfad):
         try:
             tree = ET.parse(dateipfad)
             root = tree.getroot()
-            geladene_liste = [ListSerializer._konvertiere_typ(eintrag.text) for eintrag in root.findall("Eintrag")]
+
+            geladene_liste = []
+
+            # Lade Einträge aus jedem "Array"-Element
+            for array_element in root.findall("Array"):
+                array = [Serialisierung._konvertiere_typ(eintrag.text) for eintrag in array_element.findall("Eintrag")]
+                geladene_liste.append(array)
+
             return geladene_liste
         except FileNotFoundError:
             print(f"Die Datei {dateipfad} wurde nicht gefunden.")
@@ -39,6 +57,36 @@ class ListSerializer:
                 return float(text)
             except ValueError:
                 return text
+
+    @staticmethod
+    def Entferne_array_element(dateipfad, index):
+        try:
+            tree = ET.parse(dateipfad)
+            root = tree.getroot()
+
+            # Finde das "Array"-Element mit dem gegebenen Index und entferne es
+            array_elements = root.findall("Array")
+            if 0 <= index < len(array_elements):
+                root.remove(array_elements[index])
+
+                # Speichere die aktualisierte Datei
+                tree = ET.ElementTree(root)
+                with open(dateipfad, "wb") as datei:
+                    tree.write(datei)
+
+                print(f"Das 'Array'-Element mit dem Index {index} wurde entfernt.")
+            else:
+                print(f"Ungültiger Index: {index}")
+
+        except (FileNotFoundError, ET.ParseError):
+            print(f"Fehler beim Laden der XML-Datei {dateipfad} oder das 'Array'-Element konnte nicht entfernt werden.")
+
+    @staticmethod
+    def Create_xml(dateipfad):
+        root = ET.Element("Daten")
+        tree = ET.ElementTree(root)
+        with open(dateipfad, "w", encoding="utf-8") as datei:
+            tree.write(datei, encoding="unicode")
 
 
 class Überschrift:
@@ -130,8 +178,9 @@ def zeige_Ausgabe():
 
 
 def CreatePerson():
-    PersonListe.append(
-        (Entry_NameEingeben.get(), Entry_Anlagevermögen.get(), Entry_Startzeitpunkt.get(), Entry_Endzeitpunkt.get()))
+    Liste = [Entry_NameEingeben.get(), Entry_Anlagevermögen.get(), Entry_Startzeitpunkt.get(), Entry_Endzeitpunkt.get()]
+    PersonListe.append(Liste)
+    Serialisierung.Speichern(Liste, 'PersonListe.xml')
     Entry_NameEingeben.delete(0, 'end')
     Entry_Anlagevermögen.delete(0, 'end')
     Entry_Startzeitpunkt.delete(0, 'end')
@@ -148,14 +197,16 @@ def On_comboboxPerson_select(event):
 
 def Remove_selected_person():
     selected_index = ComboBox_Person.current()
-
+    print(selected_index)
     if selected_index != -1:  # Überprüfen, ob etwas ausgewählt wurde
         removed_person = PersonListe.pop(selected_index)
         print("Entfernte Person:", removed_person)
         # Aktualisiere die ComboBox-Optionen
-        ComboBox_Person['values'] = PersonListe
+        Combobox_ElementePerson = [element[0] for element in PersonListe]
+        ComboBox_Person['values'] = Combobox_ElementePerson
         # Zelleninhalt leeren
         ComboBox_Person.set('')
+    Serialisierung.Entferne_array_element('PersonListe.xml', selected_index)
 
 
 def AddToPortfolio():
@@ -167,13 +218,14 @@ def AddToPortfolio():
 
 def FinishPortfolio():
     Summe_Anzahl = 0
-
     for Element in PortfolioListe1:
         Summe_Anzahl += Element[1]
     for Element in PortfolioListe1:
         Verteilungswert = Element[1] / Summe_Anzahl
         PortfolioListe2.append((Element[0], Verteilungswert))
-    PortfolioListe3.append((Entry_PortfolioId.get(), PortfolioListe2))
+    Liste = [Entry_PortfolioId.get(), PortfolioListe2]
+    Serialisierung.Speichern(Liste, 'PortListe.xml')
+    PortfolioListe3.append(Liste)
     Combobox_ElementePort = [element[0] for element in PortfolioListe3]
     ComboBox_Port['values'] = Combobox_ElementePort
     Entry_PortfolioId.delete(0, 'end')
@@ -194,7 +246,8 @@ def Remove_selected_Port():
         removed_person = PortfolioListe3.pop(selected_index)
         print("Entfernte Person:", removed_person)
         # Aktualisiere die ComboBox-Optionen
-        ComboBox_Port['values'] = PortfolioListe3
+        Combobox_ElementePort = [element[0] for element in PortfolioListe3]
+        ComboBox_Port['values'] = Combobox_ElementePort
         # Leere den Zelleninhalt
         ComboBox_Port.set("")
 
@@ -208,11 +261,21 @@ def startGUI():
     root.mainloop()
 
 
-PersonListe = []
+XML_PersonListe = "PersonListe.xml"
+XML_PortListe = "PortListe.xml"
+# Überprüfen, ob die Datei bereits existiert
+if not os.path.exists(XML_PersonListe):
+    # Falls nicht, erstelle die Datei mit einer leeren Liste
+    Serialisierung.Create_xml(XML_PersonListe)
+if not os.path.exists(XML_PortListe):
+    # Falls nicht, erstelle die Datei mit einer leeren Liste
+    Serialisierung.Create_xml(XML_PortListe)
+
+PersonListe = Serialisierung.Laden('PersonListe.xml')
 
 PortfolioListe1 = []
 PortfolioListe2 = []
-PortfolioListe3 = []
+PortfolioListe3 = Serialisierung.Laden('PortListe.xml')
 
 root = tk.Tk()
 root.geometry("800x600")
@@ -290,5 +353,8 @@ btn_StartWindow = Button_Menu(root, 'Startseite', zeige_StartWindow, 1, 2)
 btn_PersonAnlegen = Button_Menu(root, 'Person anlegen', zeige_PersonAnlegen, 120, 2)
 btn_PortfolioErstellen = Button_Menu(root, 'Portfolio Erstellen', zeige_PortfolioErstellen, 290, 2)
 btn_Ausgabe = Button_Menu(root, 'Ausgabe', zeige_Ausgabe, 470, 2)
-
+Combobox_Elemente_Person = [element[0] for element in PersonListe]
+ComboBox_Person['values'] = Combobox_Elemente_Person
+Combobox_Elemente_Port = [element[0] for element in PortfolioListe3]
+ComboBox_Port['values'] = Combobox_Elemente_Port
 startGUI()
