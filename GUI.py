@@ -3,6 +3,7 @@ import tkinter as tk
 from tkinter.ttk import Treeview
 from tkinter import ttk
 import xml.etree.ElementTree as ET
+from Performance import Performance
 
 
 class Serialisierung:
@@ -22,7 +23,6 @@ class Serialisierung:
         for element in liste:
             eintrag = ET.SubElement(array_element, "Eintrag")
             eintrag.text = str(element)
-
         tree = ET.ElementTree(root)
         with open(dateipfad, "wb") as datei:
             tree.write(datei)
@@ -197,7 +197,6 @@ def On_comboboxPerson_select(event):
 
 def Remove_selected_person():
     selected_index = ComboBox_Person.current()
-    print(selected_index)
     if selected_index != -1:  # Überprüfen, ob etwas ausgewählt wurde
         removed_person = PersonListe.pop(selected_index)
         print("Entfernte Person:", removed_person)
@@ -223,33 +222,36 @@ def FinishPortfolio():
     for Element in PortfolioListe1:
         Verteilungswert = Element[1] / Summe_Anzahl
         PortfolioListe2.append((Element[0], Verteilungswert))
-    Liste = [Entry_PortfolioId.get(), PortfolioListe2]
+    Liste = [Entry_PortfolioId.get(), PortfolioListe2.copy()]
     Serialisierung.Speichern(Liste, 'PortListe.xml')
-    PortfolioListe3.append(Liste)
+    Serialisierung.Laden('PortListe.xml')
+    PortfolioListe3 = Serialisierung.Laden('PortListe.xml')
     Combobox_ElementePort = [element[0] for element in PortfolioListe3]
     ComboBox_Port['values'] = Combobox_ElementePort
     Entry_PortfolioId.delete(0, 'end')
     PortfolioListe1.clear()
+    PortfolioListe2.clear()
     ClearDataGrid(data_grid)
 
 
 def On_comboboxPort_select(event):
+    PortfolioListe3 = Serialisierung.Laden('PortListe.xml')
     selected_index = ComboBox_Port.current()
     selected_port_data = PortfolioListe3[selected_index]
     print("Ausgewählte Daten:", selected_port_data)
 
 
 def Remove_selected_Port():
+    PortfolioListe3 = Serialisierung.Laden('PortListe.xml')
     selected_index = ComboBox_Port.current()
-
     if selected_index != -1:  # Überprüfen, ob etwas ausgewählt wurde
         removed_person = PortfolioListe3.pop(selected_index)
-        print("Entfernte Person:", removed_person)
         # Aktualisiere die ComboBox-Optionen
         Combobox_ElementePort = [element[0] for element in PortfolioListe3]
         ComboBox_Port['values'] = Combobox_ElementePort
         # Leere den Zelleninhalt
         ComboBox_Port.set("")
+    Serialisierung.Entferne_array_element('PortListe.xml', selected_index)
 
 
 def ClearDataGrid(self):
@@ -259,6 +261,16 @@ def ClearDataGrid(self):
 
 def startGUI():
     root.mainloop()
+
+
+def StartPlotter():
+    PortfolioListe3 = Serialisierung.Laden('PortListe.xml')
+    selected_portIndex = ComboBox_Port.current()
+    selected_port_data = PortfolioListe3[selected_portIndex]
+    selected_personIndex = ComboBox_Person.current()
+    selected_person_data = PersonListe[selected_personIndex]
+    Entnahme = Entry_Entnahme.get()
+    Performance(selected_person_data, selected_port_data, Entnahme)
 
 
 XML_PersonListe = "PersonListe.xml"
@@ -283,7 +295,6 @@ root.geometry("800x600")
 Frame_StartWindow = tk.Frame(root, bg='darkgray', width=800, height=550)
 Frame_StartWindow.place(x=0, y=50)
 Label_StartWindow_1 = Überschrift(Frame_StartWindow, text='Willkommen im Portfolio Manager', x=250, y=3)
-
 Frame_PersonErstellen = tk.Frame(root, bg='darkgray', width=800, height=550)
 
 Label_NameEingeben = Beschriftung(Frame_PersonErstellen, text='Name eingeben:', x=40, y=40)
@@ -347,7 +358,7 @@ Button_del_Port = Button_Standard(Frame_Ausgabe, 'Portfolio löschen', command=R
 Label_Entnahme = Beschriftung(Frame_Ausgabe, 'Entnahme eingeben (30 Tage Periode):', x=40, y=220)
 Entry_Entnahme = tk.Entry(Frame_Ausgabe, )
 Entry_Entnahme.place(x=40, y=250)
-Button_PlotterAnzeigen = Button_Standard(Frame_Ausgabe, 'Plotter anzeigen', x=40, y=300)
+Button_PlotterAnzeigen = Button_Standard(Frame_Ausgabe, 'Plotter anzeigen', command=StartPlotter, x=40, y=300)
 
 btn_StartWindow = Button_Menu(root, 'Startseite', zeige_StartWindow, 1, 2)
 btn_PersonAnlegen = Button_Menu(root, 'Person anlegen', zeige_PersonAnlegen, 120, 2)
